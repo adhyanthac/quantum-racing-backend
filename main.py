@@ -1,5 +1,5 @@
 """
-Q-RACING PRO BACKEND v2.2
+Q-RACING PRO BACKEND v2.3
 Quantum Entanglement Racing Engine
 DR. XU GROUP | TEXAS A&M PHYSICS
 """
@@ -15,7 +15,7 @@ from datetime import datetime
 app = FastAPI(
     title="Q-Racing Pro Backend",
     description="Quantum Entanglement Racing Simulation",
-    version="2.2.0"
+    version="2.3.0"
 )
 
 app.add_middleware(
@@ -24,6 +24,14 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"]
 )
+
+
+# Speed configurations
+SPEED_CONFIGS = {
+    'slow': {'laser_speed': 0.4, 'spawn_interval': 280},
+    'normal': {'laser_speed': 0.6, 'spawn_interval': 200},
+    'fast': {'laser_speed': 1.0, 'spawn_interval': 140},
+}
 
 
 class QuantumGame:
@@ -42,7 +50,7 @@ class QuantumGame:
     COLLISION_Y_MIN = 72  # Laser must be at least here
     COLLISION_Y_MAX = 78  # Laser must be no more than here
     
-    def __init__(self):
+    def __init__(self, speed='normal'):
         self.state = np.array([1.0, 0.0, 0.0, 0.0], dtype=complex)
         self.in_superposition = False
         self.lasers = []
@@ -50,14 +58,23 @@ class QuantumGame:
         self.frame = 0
         self.running = True
         self.paused = False
-        self.game_won = False  # Track if player completed the race
+        self.game_won = False
         self.start_time = datetime.now()
         self.hadamard_count = 0
         self.pauli_x_count = 0
         
-        # Slowed game speed
-        self.laser_speed = 0.6
-        self.laser_spawn_interval = 200  # Spawn less frequently
+        # Speed settings
+        config = SPEED_CONFIGS.get(speed, SPEED_CONFIGS['normal'])
+        self.laser_speed = config['laser_speed']
+        self.laser_spawn_interval = config['spawn_interval']
+        self.speed_mode = speed
+
+    def set_speed(self, speed):
+        """Update game speed"""
+        config = SPEED_CONFIGS.get(speed, SPEED_CONFIGS['normal'])
+        self.laser_speed = config['laser_speed']
+        self.laser_spawn_interval = config['spawn_interval']
+        self.speed_mode = speed
 
     def get_progress(self):
         """Calculate progress as percentage (0-100)"""
@@ -95,7 +112,7 @@ class QuantumGame:
         return self.paused
 
     def update(self):
-        if self.paused:
+        if self.paused or not self.running:
             return
         
         self.frame += 1
@@ -117,21 +134,17 @@ class QuantumGame:
             })
         
         # Update laser positions
-        collision_laser = None
         for laser in self.lasers[:]:
             laser['y'] += self.laser_speed
             
             # EXACT collision detection - only when laser is IN the car zone
             if self.COLLISION_Y_MIN <= laser['y'] <= self.COLLISION_Y_MAX:
                 if self.check_collision(laser):
-                    collision_laser = laser
                     self.running = False
-                    break
+                    return  # Stop updating - game over
             
-            # Remove lasers that passed through (survived) or went off screen
-            if laser['y'] > self.COLLISION_Y_MAX and laser in self.lasers:
-                self.lasers.remove(laser)
-            elif laser['y'] > 100:
+            # Remove lasers that went off screen
+            if laser['y'] > 100:
                 if laser in self.lasers:
                     self.lasers.remove(laser)
         
@@ -183,13 +196,14 @@ class QuantumGame:
             "paused": self.paused,
             "game_won": self.game_won,
             "total_frames": self.TOTAL_FRAMES,
-            "game_time_seconds": self.frame / self.GAME_FPS
+            "game_time_seconds": self.frame / self.GAME_FPS,
+            "speed_mode": self.speed_mode
         }
 
 
 @app.get("/")
 async def root():
-    return {"message": "Q-RACING PRO v2.2", "status": "ONLINE"}
+    return {"message": "Q-RACING PRO v2.3", "status": "ONLINE"}
 
 
 @app.get("/health")
@@ -203,6 +217,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     print(f"Client {client_id} connected")
     
     game = QuantumGame()
+    game_ended_sent = False
     
     try:
         while True:
@@ -216,8 +231,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     game.apply_pauli_x(data.get("target", "A"))
                 elif action == "pause":
                     game.toggle_pause()
+                elif action == "set_speed":
+                    speed = data.get("speed", "normal")
+                    game.set_speed(speed)
                 elif action == "restart":
-                    game = QuantumGame()
+                    # Create new game with same speed settings
+                    old_speed = game.speed_mode
+                    game = QuantumGame(speed=old_speed)
+                    game_ended_sent = False
                     
             except asyncio.TimeoutError:
                 pass
@@ -225,16 +246,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             game.update()
             
             if game.running:
+                game_ended_sent = False
                 await websocket.send_json({
                     "type": "game_state", 
                     "data": game.get_state()
                 })
             else:
-                # Send final state - don't break, wait for restart
+                # Send game over state once, then keep sending it so client can see crash state
+                msg_type = "game_won" if game.game_won else "game_over"
                 await websocket.send_json({
-                    "type": "game_over" if not game.game_won else "game_won",
+                    "type": msg_type,
                     "data": game.get_state()
                 })
+                game_ended_sent = True
             
             await asyncio.sleep(1 / 60)
             
