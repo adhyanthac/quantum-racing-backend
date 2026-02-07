@@ -1,8 +1,7 @@
 """
 ╔═══════════════════════════════════════════════════════════════╗
-║              Q-RACING PRO BACKEND v2.0                        ║
+║              Q-RACING PRO BACKEND v2.1                        ║
 ║             ⚡ QUANTUM ENTANGLEMENT ENGINE ⚡                  ║
-║                Y2K EDITION - CIRCA 2000                       ║
 ║         DR. XU GROUP | TEXAS A&M PHYSICS                      ║
 ╚═══════════════════════════════════════════════════════════════╝
 """
@@ -15,14 +14,13 @@ import json
 import random
 from datetime import datetime
 
-# ===== Y2K QUANTUM RACING ENGINE =====
+# ===== QUANTUM RACING ENGINE =====
 app = FastAPI(
     title="Q-Racing Pro Backend",
     description="⚡ Quantum Entanglement Racing Simulation Engine ⚡",
-    version="2.0.0-Y2K"
+    version="2.1.0"
 )
 
-# CORS Configuration - Allow all origins for the Y2K web experience
 app.add_middleware(
     CORSMiddleware, 
     allow_origins=["*"], 
@@ -37,35 +35,30 @@ class QuantumGame:
     
     Simulates a quantum racing vehicle existing in superposition
     across multiple parallel universes (α and β).
-    
-    Basis States: |00⟩, |01⟩, |10⟩, |11⟩
-    - First qubit: Lane position in Universe α
-    - Second qubit: Lane position in Universe β
     """
     
     def __init__(self):
-        # Quantum state vector in computational basis: [|00⟩, |01⟩, |10⟩, |11⟩]
+        # Quantum state vector: [|00⟩, |01⟩, |10⟩, |11⟩]
         self.state = np.array([1.0, 0.0, 0.0, 0.0], dtype=complex)
         self.in_superposition = False
         self.lasers = []
         self.score = 0
         self.frame = 0
         self.running = True
+        self.paused = False  # New: pause state
         self.start_time = datetime.now()
         self.hadamard_count = 0
         self.pauli_x_count = 0
+        
+        # SLOWED DOWN: Game speed settings
+        self.laser_speed = 0.8  # Was 2, now much slower
+        self.laser_spawn_interval = 180  # Was 100, now spawns less frequently
 
     def apply_hadamard(self):
-        """
-        Apply Hadamard gate + CNOT to create entangled superposition.
-        Places the quantum vehicle in both universes simultaneously.
-        
-        H ⊗ I followed by CNOT creates Bell state.
-        """
-        if self.in_superposition:
-            return  # Already in superposition
+        """Apply Hadamard + CNOT for superposition."""
+        if self.in_superposition or self.paused:
+            return
             
-        # Hadamard on first qubit: H ⊗ I
         h = (1 / np.sqrt(2)) * np.array([
             [1, 0, 1, 0],
             [0, 1, 0, 1],
@@ -73,7 +66,6 @@ class QuantumGame:
             [0, 1, 0, -1]
         ])
         
-        # CNOT gate for entanglement
         cnot = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
@@ -86,14 +78,11 @@ class QuantumGame:
         self.hadamard_count += 1
 
     def apply_pauli_x(self, target):
-        """
-        Apply Pauli-X (NOT) gate to flip lane position.
-        
-        target 'A': Flip in Universe α (first qubit)
-        target 'B': Flip in Universe β (second qubit)
-        """
+        """Apply Pauli-X gate to flip lane position."""
+        if self.paused:
+            return
+            
         if target == 'A':
-            # X ⊗ I: Flip first qubit
             gate = np.array([
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
@@ -101,7 +90,6 @@ class QuantumGame:
                 [0, 1, 0, 0]
             ])
         else:
-            # I ⊗ X: Flip second qubit
             gate = np.array([
                 [0, 1, 0, 0],
                 [1, 0, 0, 0],
@@ -112,14 +100,20 @@ class QuantumGame:
         self.state = np.dot(gate, self.state)
         self.pauli_x_count += 1
 
+    def toggle_pause(self):
+        """Toggle pause state."""
+        self.paused = not self.paused
+        return self.paused
+
     def update(self):
-        """
-        Game tick update - spawns lasers and handles collisions.
-        """
+        """Game tick update - SLOWED DOWN."""
+        if self.paused:
+            return
+            
         self.frame += 1
         
-        # Spawn lasers periodically (every ~1.67 seconds at 60fps)
-        if self.frame % 100 == 0:
+        # Spawn lasers less frequently
+        if self.frame % self.laser_spawn_interval == 0:
             universe = random.choice(['A', 'B']) if self.in_superposition else 'A'
             self.lasers.append({
                 'universe': universe, 
@@ -128,11 +122,10 @@ class QuantumGame:
                 'id': f"laser_{self.frame}"
             })
         
-        # Update laser positions and check collisions
+        # Move lasers slower
         for laser in self.lasers[:]:
-            laser['y'] += 2  # Laser speed
+            laser['y'] += self.laser_speed
             
-            # Collision detection zone (car position)
             if 60 < laser['y'] < 65:
                 if self.check_collision(laser):
                     self.running = False
@@ -141,37 +134,27 @@ class QuantumGame:
             elif laser['y'] > 100:
                 self.lasers.remove(laser)
         
-        # Increment score while running
         if self.running:
             self.score += 1
 
     def check_collision(self, laser):
-        """
-        Quantum measurement - collapse state and check for collision.
-        
-        The collision is probabilistic based on the quantum state.
-        Upon survival, the state collapses to a classical state.
-        """
+        """Quantum measurement and collision check."""
         probs = np.abs(self.state) ** 2
         
-        # Determine which basis states would result in a hit
         if laser['universe'] == 'A' and laser['lane'] == 0:
-            hit_idx = [0, 1]  # |00⟩, |01⟩
+            hit_idx = [0, 1]
         elif laser['universe'] == 'A' and laser['lane'] == 1:
-            hit_idx = [2, 3]  # |10⟩, |11⟩
+            hit_idx = [2, 3]
         elif laser['universe'] == 'B' and laser['lane'] == 0:
-            hit_idx = [0, 2]  # |00⟩, |10⟩
-        else:  # Universe B, lane 1
-            hit_idx = [1, 3]  # |01⟩, |11⟩
+            hit_idx = [0, 2]
+        else:
+            hit_idx = [1, 3]
         
-        # Probability of collision
         prob_hit = sum(probs[i] for i in hit_idx)
         
-        # Quantum measurement - probabilistic outcome
         if random.random() < prob_hit:
-            return True  # 💥 COLLISION - GAME OVER
+            return True
         
-        # Survived! Collapse to safe classical state in Universe α
         safe_lane = 0 if (probs[0] + probs[1] > probs[2] + probs[3]) else 1
         self.state = np.array([0, 0, 0, 0], dtype=complex)
         self.state[0 if safe_lane == 0 else 2] = 1.0
@@ -180,9 +163,7 @@ class QuantumGame:
         return False
 
     def get_state(self):
-        """
-        Return complete game state for frontend rendering.
-        """
+        """Return complete game state."""
         return {
             "quantum_vehicle": {
                 "state_vector": [
@@ -197,70 +178,52 @@ class QuantumGame:
             "score": self.score,
             "frame": self.frame,
             "running": self.running,
+            "paused": self.paused,
             "game_time_ms": int((datetime.now() - self.start_time).total_seconds() * 1000)
         }
 
 
-# ===== ROOT ENDPOINT =====
 @app.get("/")
 async def root():
-    """Y2K Welcome Message"""
     return {
-        "message": "⚡ Q-RACING PRO v2.0 - Y2K EDITION ⚡",
+        "message": "⚡ Q-RACING PRO v2.1 ⚡",
         "status": "QUANTUM ENGINE ONLINE",
-        "endpoints": {
-            "websocket": "/ws/{client_id}",
-            "health": "/health"
-        },
-        "credits": "DR. XU GROUP | TEXAS A&M PHYSICS"
+        "endpoints": {"websocket": "/ws/{client_id}", "health": "/health"}
     }
 
 
-# ===== HEALTH CHECK =====
 @app.get("/health")
 async def health():
-    """Health check endpoint for monitoring."""
-    return {
-        "status": "healthy",
-        "engine": "QUANTUM ENTANGLEMENT ENGINE v2.0",
-        "timestamp": datetime.now().isoformat()
-    }
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
-# ===== WEBSOCKET GAME ENDPOINT =====
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    """
-    Real-time WebSocket connection for quantum racing gameplay.
-    
-    Handles:
-    - 'hadamard' action: Enter superposition
-    - 'pauli_x' action: Flip lane position (target: 'A' or 'B')
-    """
+    """Real-time WebSocket for quantum racing gameplay."""
     await websocket.accept()
-    print(f"⚡ Client {client_id} connected to Quantum Racing Engine")
+    print(f"⚡ Client {client_id} connected")
     
     game = QuantumGame()
     
     try:
         while True:
-            # Non-blocking receive for player input
             try:
-                data = await asyncio.wait_for(
-                    websocket.receive_json(), 
-                    timeout=0.01
-                )
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=0.02)
                 action = data.get("action")
                 
                 if action == "hadamard":
                     game.apply_hadamard()
                 elif action == "pauli_x":
                     game.apply_pauli_x(data.get("target", "A"))
+                elif action == "pause":
+                    game.toggle_pause()
+                elif action == "restart":
+                    # Reset game without disconnecting
+                    game = QuantumGame()
                     
             except asyncio.TimeoutError:
-                pass  # No input this frame
+                pass
             
-            # Update game state and send to client
             if game.running:
                 game.update()
                 await websocket.send_json({
@@ -268,28 +231,21 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     "data": game.get_state()
                 })
             else:
-                # Send final state on game over
                 await websocket.send_json({
                     "type": "game_over",
                     "data": game.get_state(),
-                    "message": "⚠️ QUANTUM COLLAPSE - GAME OVER ⚠️"
+                    "message": "GAME OVER"
                 })
-                break
+                # Don't break - wait for restart command
             
-            # ~60 FPS game loop
             await asyncio.sleep(1 / 60)
             
     except WebSocketDisconnect:
-        print(f"⚡ Client {client_id} disconnected - Final Score: {game.score}")
+        print(f"⚡ Client {client_id} disconnected - Score: {game.score}")
     except Exception as e:
-        print(f"⚠️ Error with client {client_id}: {e}")
+        print(f"⚠️ Error: {e}")
 
 
-# ===== DEV SERVER =====
 if __name__ == "__main__":
     import uvicorn
-    print("╔════════════════════════════════════════╗")
-    print("║   ⚡ Q-RACING PRO SERVER v2.0 ⚡       ║")
-    print("║       Y2K EDITION - ACTIVATED          ║")
-    print("╚════════════════════════════════════════╝")
     uvicorn.run(app, host="0.0.0.0", port=8000)
