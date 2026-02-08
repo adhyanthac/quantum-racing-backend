@@ -147,41 +147,61 @@ class QuantumGame:
 
     def apply_pauli_x_A(self):
         """
-        Press A or D: Apply Pauli-X to Universe A qubit (swap lanes in A)
-        X ⊗ I: |00⟩↔|10⟩, |01⟩↔|11⟩
-        
-        Because of entanglement, this changes the joint state!
+        Press A or D: Swap lanes
+        When in superposition (entangled), flipping one qubit flips BOTH
+        because they are entangled!
         """
         if self.paused:
             return
-            
-        pauli_x_I = np.array([
-            [0, 0, 1, 0],
-            [0, 0, 0, 1],
-            [1, 0, 0, 0],
-            [0, 1, 0, 0]
-        ], dtype=complex)
         
-        self.state = pauli_x_I @ self.state
+        if self.in_superposition:
+            # ENTANGLEMENT: Both cars flip together!
+            # Apply X ⊗ X (flip both qubits)
+            pauli_x_x = np.array([
+                [0, 0, 0, 1],
+                [0, 0, 1, 0],
+                [0, 1, 0, 0],
+                [1, 0, 0, 0]
+            ], dtype=complex)
+            self.state = pauli_x_x @ self.state
+        else:
+            # Classical: just flip qubit A
+            pauli_x_I = np.array([
+                [0, 0, 1, 0],
+                [0, 0, 0, 1],
+                [1, 0, 0, 0],
+                [0, 1, 0, 0]
+            ], dtype=complex)
+            self.state = pauli_x_I @ self.state
 
     def apply_pauli_x_B(self):
         """
-        Press ←/→: Apply Pauli-X to Universe B qubit (swap lanes in B)
-        I ⊗ X: |00⟩↔|01⟩, |10⟩↔|11⟩
-        
-        Because of entanglement, this changes the joint state!
+        Press ←/→: Swap lanes
+        When in superposition (entangled), flipping one qubit flips BOTH
+        because they are entangled!
         """
         if self.paused:
             return
-            
-        I_pauli_x = np.array([
-            [0, 1, 0, 0],
-            [1, 0, 0, 0],
-            [0, 0, 0, 1],
-            [0, 0, 1, 0]
-        ], dtype=complex)
         
-        self.state = I_pauli_x @ self.state
+        if self.in_superposition:
+            # ENTANGLEMENT: Both cars flip together!
+            # Apply X ⊗ X (flip both qubits)
+            pauli_x_x = np.array([
+                [0, 0, 0, 1],
+                [0, 0, 1, 0],
+                [0, 1, 0, 0],
+                [1, 0, 0, 0]
+            ], dtype=complex)
+            self.state = pauli_x_x @ self.state
+        else:
+            # Classical: just flip qubit B
+            I_pauli_x = np.array([
+                [0, 1, 0, 0],
+                [1, 0, 0, 0],
+                [0, 0, 0, 1],
+                [0, 0, 1, 0]
+            ], dtype=complex)
+            self.state = I_pauli_x @ self.state
 
     def toggle_pause(self):
         self.paused = not self.paused
