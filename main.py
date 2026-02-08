@@ -261,10 +261,11 @@ class QuantumGame:
 
     def measure_collision(self, laser):
         """
-        QUANTUM MEASUREMENT using Born Rule!
+        Collision detection based on visual lanes.
         
-        When laser reaches car, it's a measurement event.
-        We collapse the wavefunction based on probabilities.
+        In superposition: cars are anti-correlated (A left, B right or vice versa)
+        So there's always ONE safe universe for any laser position.
+        The quantum tunneling effect comes from the initial anti-correlation.
         
         Returns: 'crash' or 'pass'
         """
@@ -272,50 +273,37 @@ class QuantumGame:
         universe = laser['universe']
         laser_lane = laser['lane']
         
-        if not self.in_superposition:
-            # Classical mode: deterministic
-            # Determine car lane from quantum state, then apply offset
-            if probs[0] > 0.5 or probs[1] > 0.5:
-                base_lane = 0  # left
+        # Calculate visual car lane for the relevant universe
+        if self.in_superposition:
+            # Anti-correlated base: A=0, B=1 (or flipped by offset)
+            if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
+                base_lane_A = 0
+                base_lane_B = 1
             else:
-                base_lane = 1  # right
-            
-            # Apply the lane offset
-            car_lane = (base_lane + self.lane_offset) % 2
-            
-            return 'crash' if car_lane == laser_lane else 'pass'
-        
-        # QUANTUM: In superposition - use Born rule!
-        # The lane_offset flips visual lanes, so we need to "un-offset" the laser
-        # to check against the base quantum state
-        effective_laser_lane = (laser_lane + self.lane_offset) % 2
-        
-        # Calculate probability of being hit
-        if universe == 'A':
-            # Laser in Universe A - check qubit A
-            if effective_laser_lane == 0:  # Laser effectively in left lane (base)
-                # Hit states: |00⟩, |01⟩ (where A=left)
-                prob_hit = probs[0] + probs[1]
-            else:  # Laser effectively in right lane (base)
-                # Hit states: |10⟩, |11⟩ (where A=right)
-                prob_hit = probs[2] + probs[3]
+                base_lane_A = 0 if (probs[0] + probs[1]) >= 0.5 else 1
+                base_lane_B = 0 if (probs[0] + probs[2]) >= 0.5 else 1
         else:
-            # Laser in Universe B - check qubit B
-            if effective_laser_lane == 0:  # Laser effectively in left lane (base)
-                # Hit states: |00⟩, |10⟩ (where B=left)
-                prob_hit = probs[0] + probs[2]
-            else:  # Laser effectively in right lane (base)
-                # Hit states: |01⟩, |11⟩ (where B=right)
-                prob_hit = probs[1] + probs[3]
+            # Classical mode
+            if probs[0] > 0.5 or probs[1] > 0.5:
+                base_lane_A = 0
+            else:
+                base_lane_A = 1
+            base_lane_B = base_lane_A  # Not shown in classical
         
-        # Born rule: random collapse based on probability
-        if random.random() < prob_hit:
-            # CRASH! Collapsed to a hit state
+        # Apply offset
+        visual_lane_A = (base_lane_A + self.lane_offset) % 2
+        visual_lane_B = (base_lane_B + self.lane_offset) % 2
+        
+        # Get the visual lane for the relevant universe
+        if universe == 'A':
+            car_lane = visual_lane_A
+        else:
+            car_lane = visual_lane_B
+        
+        # Simple collision: same lane = crash
+        if car_lane == laser_lane:
             return 'crash'
         else:
-            # PASS! Collapsed to a safe state
-            # Collapse the wavefunction to safe states
-            self._collapse_to_safe(universe, effective_laser_lane)
             return 'pass'
 
     def _collapse_to_safe(self, universe, laser_lane):
@@ -369,10 +357,26 @@ class QuantumGame:
 
     def get_state(self):
         lane_probs = self.get_lane_probabilities()
+        probs = np.abs(self.state) ** 2
         
         # Determine base lanes from quantum state
-        base_lane_A = 0 if lane_probs['A']['left'] > 0.5 else 1
-        base_lane_B = 0 if lane_probs['B']['left'] > 0.5 else 1
+        if self.in_superposition:
+            # For |Ψ+⟩ = (|01⟩ + |10⟩)/√2, cars are anti-correlated
+            # |01⟩ (index 1): A=left(0), B=right(1)
+            # |10⟩ (index 2): A=right(1), B=left(0)
+            # Use index 1 (|01⟩) as base visual: A in left, B in right
+            # This keeps cars visually anti-correlated!
+            if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
+                base_lane_A = 0  # A starts in left
+                base_lane_B = 1  # B starts in right
+            else:
+                # Fallback for other states
+                base_lane_A = 0 if lane_probs['A']['left'] >= 0.5 else 1
+                base_lane_B = 0 if lane_probs['B']['left'] >= 0.5 else 1
+        else:
+            # Classical: use probability to determine lane
+            base_lane_A = 0 if lane_probs['A']['left'] > 0.5 else 1
+            base_lane_B = 0 if lane_probs['B']['left'] > 0.5 else 1
         
         # Apply lane offset (flips lanes when swap is pressed)
         visual_lane_A = (base_lane_A + self.lane_offset) % 2
