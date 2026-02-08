@@ -147,17 +147,17 @@ class QuantumGame:
     def apply_pauli_x_A(self):
         """
         Press A or D: Swap lanes
-        Toggles the lane offset, visually swapping both cars.
-        The quantum state probability (50/50) stays the same for collisions.
+        In classical mode: directly flip the quantum state
+        In superposition: toggle visual offset (probabilities stay same)
         """
         if self.paused:
             return
         
-        # Toggle the lane offset - this swaps the visual positions
-        self.lane_offset = 1 - self.lane_offset
-        
-        # In classical mode, also flip the actual quantum state
-        if not self.in_superposition:
+        if self.in_superposition:
+            # In superposition, toggle the lane offset for visual swap
+            self.lane_offset = 1 - self.lane_offset
+        else:
+            # In classical mode, flip the actual quantum state (no offset change)
             pauli_x_I = np.array([
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
@@ -168,16 +168,18 @@ class QuantumGame:
 
     def apply_pauli_x_B(self):
         """
-        Press ←/→: Swap lanes (same as A/D since entangled)
+        Press ←/→: Swap lanes
+        In classical mode: directly flip the quantum state
+        In superposition: toggle visual offset (probabilities stay same)
         """
         if self.paused:
             return
         
-        # Toggle the lane offset - this swaps the visual positions
-        self.lane_offset = 1 - self.lane_offset
-        
-        # In classical mode, also flip the actual quantum state
-        if not self.in_superposition:
+        if self.in_superposition:
+            # In superposition, toggle the lane offset for visual swap
+            self.lane_offset = 1 - self.lane_offset
+        else:
+            # In classical mode, flip the actual quantum state (no offset change)
             I_pauli_x = np.array([
                 [0, 1, 0, 0],
                 [1, 0, 0, 0],
