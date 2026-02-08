@@ -228,40 +228,33 @@ class QuantumGame:
             self.running = False
             return
         
-        # Spawn lasers
+        # Spawn lasers - but only ONE at a time near the player!
         if self.frame % self.laser_spawn_interval == 0:
-            if self.in_superposition:
-                # In superposition: lasers can appear in BOTH universes
-                universe = random.choice(['A', 'B'])
-            else:
-                # Classical: only Universe A
-                universe = 'A'
+            # Check if there's ANY laser still in the danger zone (top 75% of screen)
+            # If so, don't spawn a new laser yet
+            any_laser_nearby = any(l['y'] < 70 for l in self.lasers)
             
-            # Random speed variation (0.7x to 1.5x base speed)
-            speed_multiplier = 0.7 + random.random() * 0.8
-            
-            # Check for "impossible" situations
-            # If there's a recent laser in one lane, don't spawn in the other lane
-            left_blocked = any(l['lane'] == 0 and l['y'] < 60 for l in self.lasers)
-            right_blocked = any(l['lane'] == 1 and l['y'] < 60 for l in self.lasers)
-            
-            spawn_lane = random.choice([0, 1])
-            
-            # Logic: Keep one lane clear if possible
-            if left_blocked and not right_blocked:
-                spawn_lane = 0  # Force left (keep right clear)
-            elif right_blocked and not left_blocked:
-                spawn_lane = 1  # Force right (keep left clear)
-            # If both or neither blocked, strictly random is fine 
-            # (if neither blocked, safe. if both blocked, already in trouble but consistent)
-            
-            self.lasers.append({
-                'universe': universe,
-                'lane': spawn_lane,
-                'y': -5,
-                'id': f"laser_{self.frame}",
-                'speed': self.laser_speed * speed_multiplier
-            })
+            if not any_laser_nearby:
+                if self.in_superposition:
+                    # In superposition: lasers can appear in BOTH universes
+                    universe = random.choice(['A', 'B'])
+                else:
+                    # Classical: only Universe A
+                    universe = 'A'
+                
+                # Random speed variation (0.7x to 1.5x base speed)
+                speed_multiplier = 0.7 + random.random() * 0.8
+                
+                # Random lane selection
+                spawn_lane = random.choice([0, 1])
+                
+                self.lasers.append({
+                    'universe': universe,
+                    'lane': spawn_lane,
+                    'y': -5,
+                    'id': f"laser_{self.frame}",
+                    'speed': self.laser_speed * speed_multiplier
+                })
         
         # Update lasers and check collisions
         for laser in self.lasers[:]:
