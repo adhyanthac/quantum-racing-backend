@@ -88,6 +88,9 @@ class QuantumGame:
         self.lasers_passed = 0
         self.crash_frame = None
         
+        # Lane offset for visual swapping (toggles 0/1)
+        self.lane_offset = 0
+        
         # Speed settings
         config = SPEED_CONFIGS.get(speed, SPEED_CONFIGS['normal'])
         self.laser_speed = config['laser_speed']
@@ -137,24 +140,17 @@ class QuantumGame:
     def apply_pauli_x_A(self):
         """
         Press A or D: Swap lanes
-        When in superposition (entangled), flipping one qubit flips BOTH
-        because they are entangled!
+        Toggles the lane offset, visually swapping both cars.
+        The quantum state probability (50/50) stays the same for collisions.
         """
         if self.paused:
             return
         
-        if self.in_superposition:
-            # ENTANGLEMENT: Both cars flip together!
-            # Apply X ⊗ X (flip both qubits)
-            pauli_x_x = np.array([
-                [0, 0, 0, 1],
-                [0, 0, 1, 0],
-                [0, 1, 0, 0],
-                [1, 0, 0, 0]
-            ], dtype=complex)
-            self.state = pauli_x_x @ self.state
-        else:
-            # Classical: just flip qubit A
+        # Toggle the lane offset - this swaps the visual positions
+        self.lane_offset = 1 - self.lane_offset
+        
+        # In classical mode, also flip the actual quantum state
+        if not self.in_superposition:
             pauli_x_I = np.array([
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
@@ -165,25 +161,16 @@ class QuantumGame:
 
     def apply_pauli_x_B(self):
         """
-        Press ←/→: Swap lanes
-        When in superposition (entangled), flipping one qubit flips BOTH
-        because they are entangled!
+        Press ←/→: Swap lanes (same as A/D since entangled)
         """
         if self.paused:
             return
         
-        if self.in_superposition:
-            # ENTANGLEMENT: Both cars flip together!
-            # Apply X ⊗ X (flip both qubits)
-            pauli_x_x = np.array([
-                [0, 0, 0, 1],
-                [0, 0, 1, 0],
-                [0, 1, 0, 0],
-                [1, 0, 0, 0]
-            ], dtype=complex)
-            self.state = pauli_x_x @ self.state
-        else:
-            # Classical: just flip qubit B
+        # Toggle the lane offset - this swaps the visual positions
+        self.lane_offset = 1 - self.lane_offset
+        
+        # In classical mode, also flip the actual quantum state
+        if not self.in_superposition:
             I_pauli_x = np.array([
                 [0, 1, 0, 0],
                 [1, 0, 0, 0],
@@ -287,33 +274,37 @@ class QuantumGame:
         
         if not self.in_superposition:
             # Classical mode: deterministic
-            # In classical, car is definitely in one lane
-            # state[0]=1 means |00⟩ (both left), state[2]=1 means |10⟩ (A right, B left)
+            # Determine car lane from quantum state, then apply offset
             if probs[0] > 0.5 or probs[1] > 0.5:
-                car_lane = 0  # left
+                base_lane = 0  # left
             else:
-                car_lane = 1  # right
+                base_lane = 1  # right
+            
+            # Apply the lane offset
+            car_lane = (base_lane + self.lane_offset) % 2
             
             return 'crash' if car_lane == laser_lane else 'pass'
         
         # QUANTUM: In superposition - use Born rule!
+        # The lane_offset flips visual lanes, so we need to "un-offset" the laser
+        # to check against the base quantum state
+        effective_laser_lane = (laser_lane + self.lane_offset) % 2
         
         # Calculate probability of being hit
         if universe == 'A':
             # Laser in Universe A - check qubit A
-            # Hit if A is in laser's lane
-            if laser_lane == 0:  # Laser in left lane
+            if effective_laser_lane == 0:  # Laser effectively in left lane (base)
                 # Hit states: |00⟩, |01⟩ (where A=left)
                 prob_hit = probs[0] + probs[1]
-            else:  # Laser in right lane
+            else:  # Laser effectively in right lane (base)
                 # Hit states: |10⟩, |11⟩ (where A=right)
                 prob_hit = probs[2] + probs[3]
         else:
             # Laser in Universe B - check qubit B
-            if laser_lane == 0:  # Laser in left lane
+            if effective_laser_lane == 0:  # Laser effectively in left lane (base)
                 # Hit states: |00⟩, |10⟩ (where B=left)
                 prob_hit = probs[0] + probs[2]
-            else:  # Laser in right lane
+            else:  # Laser effectively in right lane (base)
                 # Hit states: |01⟩, |11⟩ (where B=right)
                 prob_hit = probs[1] + probs[3]
         
@@ -324,7 +315,7 @@ class QuantumGame:
         else:
             # PASS! Collapsed to a safe state
             # Collapse the wavefunction to safe states
-            self._collapse_to_safe(universe, laser_lane)
+            self._collapse_to_safe(universe, effective_laser_lane)
             return 'pass'
 
     def _collapse_to_safe(self, universe, laser_lane):
@@ -379,6 +370,14 @@ class QuantumGame:
     def get_state(self):
         lane_probs = self.get_lane_probabilities()
         
+        # Determine base lanes from quantum state
+        base_lane_A = 0 if lane_probs['A']['left'] > 0.5 else 1
+        base_lane_B = 0 if lane_probs['B']['left'] > 0.5 else 1
+        
+        # Apply lane offset (flips lanes when swap is pressed)
+        visual_lane_A = (base_lane_A + self.lane_offset) % 2
+        visual_lane_B = (base_lane_B + self.lane_offset) % 2
+        
         return {
             "in_superposition": self.in_superposition,
             "state_vector": [
@@ -388,12 +387,12 @@ class QuantumGame:
             "probabilities": self.get_probabilities(),
             "lane_probabilities": lane_probs,
             "car_A": {
-                "lane": 0 if lane_probs['A']['left'] > 0.5 else 1,
+                "lane": visual_lane_A,
                 "left_prob": lane_probs['A']['left'],
                 "right_prob": lane_probs['A']['right']
             },
             "car_B": {
-                "lane": 0 if lane_probs['B']['left'] > 0.5 else 1,
+                "lane": visual_lane_B,
                 "left_prob": lane_probs['B']['left'],
                 "right_prob": lane_probs['B']['right']
             },
@@ -408,7 +407,8 @@ class QuantumGame:
             "hadamard_uses": self.hadamard_uses,
             "lasers_passed": self.lasers_passed,
             "crash_frame": self.crash_frame,
-            "speed_mode": self.speed_mode
+            "speed_mode": self.speed_mode,
+            "lane_offset": self.lane_offset
         }
 
 
