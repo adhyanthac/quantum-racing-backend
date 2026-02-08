@@ -41,11 +41,11 @@ app.add_middleware(
 )
 
 
-# Speed configurations - increased laser frequency
+# Speed configurations - INCREASED by 60%
 SPEED_CONFIGS = {
-    'slow': {'laser_speed': 0.5, 'spawn_interval': 100, 'superposition_spawn': 70},
-    'normal': {'laser_speed': 0.7, 'spawn_interval': 70, 'superposition_spawn': 50},
-    'fast': {'laser_speed': 1.0, 'spawn_interval': 50, 'superposition_spawn': 35},
+    'slow': {'laser_speed': 0.8, 'spawn_interval': 60, 'superposition_spawn': 45},
+    'normal': {'laser_speed': 1.1, 'spawn_interval': 45, 'superposition_spawn': 32},
+    'fast': {'laser_speed': 1.6, 'spawn_interval': 30, 'superposition_spawn': 22},
 }
 
 
