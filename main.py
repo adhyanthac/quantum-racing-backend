@@ -114,28 +114,35 @@ class QuantumGame:
 
     def apply_hadamard_cnot(self):
         """
-        Press H: Create entangled superposition!
+        Press H: Create TRUE quantum superposition with random probabilities!
         
-        We create the |Ψ+⟩ Bell state: (|01⟩ + |10⟩)/√2
+        State vector: |ψ⟩ = α|00⟩ + β|01⟩ + γ|10⟩ + δ|11⟩
         
-        This means:
-        - 50% chance: Car A in LEFT, Car B in RIGHT
-        - 50% chance: Car A in RIGHT, Car B in LEFT
+        |00⟩ = A:left, B:left
+        |01⟩ = A:left, B:right  
+        |10⟩ = A:right, B:left
+        |11⟩ = A:right, B:right
         
-        The cars are ANTI-CORRELATED (opposite lanes)!
-        This gives 50% survival on ANY laser - like quantum tunneling!
+        Probabilities are RANDOM - player must read them to choose wisely!
         """
-        if self.paused or self.in_superposition:
+        if self.paused:
             return
         
-        # Create |Ψ+⟩ = (|01⟩ + |10⟩)/√2 directly
-        # |01⟩ = A:left, B:right
-        # |10⟩ = A:right, B:left
-        h = 1 / np.sqrt(2)
-        self.state = np.array([0, h, h, 0], dtype=complex)
+        # Generate random amplitudes
+        # Create 4 random values and normalize
+        raw = np.array([random.random() for _ in range(4)])
         
+        # Ensure we have some variety (not all in one state)
+        # Add minimum threshold
+        raw = raw + 0.1
+        
+        # Normalize to get valid quantum state (sum of squares = 1)
+        amplitudes = np.sqrt(raw / np.sum(raw))
+        
+        self.state = amplitudes.astype(complex)
         self.in_superposition = True
         self.hadamard_uses += 1
+        self.lane_offset = 0  # Reset offset when entering superposition
 
     def apply_pauli_x_A(self):
         """
@@ -228,16 +235,21 @@ class QuantumGame:
                 # Classical: only Universe A
                 universe = 'A'
             
+            # Random speed variation (0.7x to 1.5x base speed)
+            speed_multiplier = 0.7 + random.random() * 0.8
+            
             self.lasers.append({
                 'universe': universe,
                 'lane': random.choice([0, 1]),  # 0=left, 1=right
                 'y': -5,
-                'id': f"laser_{self.frame}"
+                'id': f"laser_{self.frame}",
+                'speed': self.laser_speed * speed_multiplier
             })
         
         # Update lasers and check collisions
         for laser in self.lasers[:]:
-            laser['y'] += self.laser_speed
+            # Each laser has its own speed
+            laser['y'] += laser.get('speed', self.laser_speed)
             
             # Collision check (measurement!)
             if self.COLLISION_Y_MIN <= laser['y'] <= self.COLLISION_Y_MAX:
@@ -250,6 +262,9 @@ class QuantumGame:
                     self.lasers_passed += 1
                     if laser in self.lasers:
                         self.lasers.remove(laser)
+                    # COLLAPSE after passing in superposition!
+                    if self.in_superposition:
+                        self._collapse_after_pass(laser)
             
             # Remove off-screen lasers
             elif laser['y'] > 100:
@@ -261,12 +276,12 @@ class QuantumGame:
 
     def measure_collision(self, laser):
         """
-        QUANTUM MEASUREMENT using Born Rule!
+        QUANTUM MEASUREMENT using TRUE Born Rule!
         
-        In superposition: Even if car is visually in laser's lane, there's a 
-        PROBABILITY of passing through (quantum tunneling)!
+        Survival probability = probability of being in the SAFE lane
+        Based on the actual quantum state probabilities.
         
-        The |Ψ+⟩ state gives 50% survival chance on any collision.
+        Player must read probabilities and choose wisely!
         
         Returns: 'crash' or 'pass'
         """
@@ -283,35 +298,32 @@ class QuantumGame:
             car_lane = (base_lane + self.lane_offset) % 2
             return 'crash' if car_lane == laser_lane else 'pass'
         
-        # QUANTUM MODE: Use Born rule!
-        # Calculate visual car lane
-        if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
-            base_lane_A = 0
-            base_lane_B = 1
-        else:
-            base_lane_A = 0 if (probs[0] + probs[1]) >= 0.5 else 1
-            base_lane_B = 0 if (probs[0] + probs[2]) >= 0.5 else 1
+        # QUANTUM MODE: Use TRUE Born rule with actual probabilities!
+        # Calculate probability of survival based on quantum state
         
-        visual_lane_A = (base_lane_A + self.lane_offset) % 2
-        visual_lane_B = (base_lane_B + self.lane_offset) % 2
+        # Apply lane_offset to determine effective laser lane in quantum basis
+        effective_laser_lane = (laser_lane + self.lane_offset) % 2
         
         if universe == 'A':
-            car_lane = visual_lane_A
-        else:
-            car_lane = visual_lane_B
+            # Probability car A is in SAFE lane (NOT the laser lane)
+            if effective_laser_lane == 0:  # Laser in left lane
+                # Safe if A is in right lane: |10⟩ or |11⟩
+                prob_safe = probs[2] + probs[3]
+            else:  # Laser in right lane
+                # Safe if A is in left lane: |00⟩ or |01⟩
+                prob_safe = probs[0] + probs[1]
+        else:  # Universe B
+            if effective_laser_lane == 0:  # Laser in left lane
+                # Safe if B is in right lane: |01⟩ or |11⟩
+                prob_safe = probs[1] + probs[3]
+            else:  # Laser in right lane
+                # Safe if B is in left lane: |00⟩ or |10⟩
+                prob_safe = probs[0] + probs[2]
         
-        # If car is visually in a different lane, definitely pass
-        if car_lane != laser_lane:
-            return 'pass'
-        
-        # Car is in the SAME lane as laser - QUANTUM MEASUREMENT!
-        # Born rule: 50% chance to "tunnel through" (collapse to safe state)
-        # This represents the quantum superposition measurement
-        if random.random() < 0.5:
-            # QUANTUM TUNNELING! Collapsed to safe state
+        # Born rule: survive with probability = prob_safe
+        if random.random() < prob_safe:
             return 'pass'
         else:
-            # Measurement collapsed to hit state
             return 'crash'
 
     def _collapse_to_safe(self, universe, laser_lane):
@@ -363,32 +375,58 @@ class QuantumGame:
             self.state = np.array([1.0, 0, 0, 0], dtype=complex)
             self.in_superposition = False
 
+    def _collapse_after_pass(self, laser):
+        """
+        Collapse back to classical mode after passing through a laser.
+        The wavefunction measurement causes collapse - can use H again!
+        """
+        universe = laser['universe']
+        laser_lane = laser['lane']
+        probs = np.abs(self.state) ** 2
+        
+        # Determine which lane the car ended up in based on survival
+        # If laser was in lane X and we passed, we're in the OTHER lane
+        safe_lane = 1 - laser_lane
+        
+        # Collapse to classical state
+        if safe_lane == 0:  # Car in left lane
+            self.state = np.array([1.0, 0, 0, 0], dtype=complex)  # |00⟩
+        else:  # Car in right lane
+            self.state = np.array([0, 0, 1.0, 0], dtype=complex)  # |10⟩
+        
+        self.in_superposition = False
+        self.lane_offset = 0  # Reset offset
+
     def get_state(self):
         lane_probs = self.get_lane_probabilities()
         probs = np.abs(self.state) ** 2
         
-        # Determine base lanes from quantum state
-        if self.in_superposition:
-            # For |Ψ+⟩ = (|01⟩ + |10⟩)/√2, cars are anti-correlated
-            # |01⟩ (index 1): A=left(0), B=right(1)
-            # |10⟩ (index 2): A=right(1), B=left(0)
-            # Use index 1 (|01⟩) as base visual: A in left, B in right
-            # This keeps cars visually anti-correlated!
-            if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
-                base_lane_A = 0  # A starts in left
-                base_lane_B = 1  # B starts in right
-            else:
-                # Fallback for other states
-                base_lane_A = 0 if lane_probs['A']['left'] >= 0.5 else 1
-                base_lane_B = 0 if lane_probs['B']['left'] >= 0.5 else 1
-        else:
-            # Classical: use probability to determine lane
+        # In classical, car is in definite lane
+        # In superposition, show car position based on highest probability
+        if not self.in_superposition:
             base_lane_A = 0 if lane_probs['A']['left'] > 0.5 else 1
-            base_lane_B = 0 if lane_probs['B']['left'] > 0.5 else 1
+            base_lane_B = base_lane_A
+        else:
+            # Show most likely position for each car
+            base_lane_A = 0 if lane_probs['A']['left'] > lane_probs['A']['right'] else 1
+            base_lane_B = 0 if lane_probs['B']['left'] > lane_probs['B']['right'] else 1
         
         # Apply lane offset (flips lanes when swap is pressed)
         visual_lane_A = (base_lane_A + self.lane_offset) % 2
         visual_lane_B = (base_lane_B + self.lane_offset) % 2
+        
+        # Calculate effective probabilities (with offset applied)
+        if self.lane_offset == 0:
+            eff_A_left = lane_probs['A']['left']
+            eff_A_right = lane_probs['A']['right']
+            eff_B_left = lane_probs['B']['left']
+            eff_B_right = lane_probs['B']['right']
+        else:
+            # Offset flips visual lanes
+            eff_A_left = lane_probs['A']['right']
+            eff_A_right = lane_probs['A']['left']
+            eff_B_left = lane_probs['B']['right']
+            eff_B_right = lane_probs['B']['left']
         
         return {
             "in_superposition": self.in_superposition,
@@ -398,15 +436,20 @@ class QuantumGame:
             ],
             "probabilities": self.get_probabilities(),
             "lane_probabilities": lane_probs,
+            # 4 probability percentages for display
+            "prob_A_left": round(eff_A_left * 100, 1),
+            "prob_A_right": round(eff_A_right * 100, 1),
+            "prob_B_left": round(eff_B_left * 100, 1),
+            "prob_B_right": round(eff_B_right * 100, 1),
             "car_A": {
                 "lane": visual_lane_A,
-                "left_prob": lane_probs['A']['left'],
-                "right_prob": lane_probs['A']['right']
+                "left_prob": eff_A_left,
+                "right_prob": eff_A_right
             },
             "car_B": {
                 "lane": visual_lane_B,
-                "left_prob": lane_probs['B']['left'],
-                "right_prob": lane_probs['B']['right']
+                "left_prob": eff_B_left,
+                "right_prob": eff_B_right
             },
             "lasers": self.lasers,
             "score": self.score,
