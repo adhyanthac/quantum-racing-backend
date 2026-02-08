@@ -261,11 +261,12 @@ class QuantumGame:
 
     def measure_collision(self, laser):
         """
-        Collision detection based on visual lanes.
+        QUANTUM MEASUREMENT using Born Rule!
         
-        In superposition: cars are anti-correlated (A left, B right or vice versa)
-        So there's always ONE safe universe for any laser position.
-        The quantum tunneling effect comes from the initial anti-correlation.
+        In superposition: Even if car is visually in laser's lane, there's a 
+        PROBABILITY of passing through (quantum tunneling)!
+        
+        The |Ψ+⟩ state gives 50% survival chance on any collision.
         
         Returns: 'crash' or 'pass'
         """
@@ -273,38 +274,45 @@ class QuantumGame:
         universe = laser['universe']
         laser_lane = laser['lane']
         
-        # Calculate visual car lane for the relevant universe
-        if self.in_superposition:
-            # Anti-correlated base: A=0, B=1 (or flipped by offset)
-            if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
-                base_lane_A = 0
-                base_lane_B = 1
-            else:
-                base_lane_A = 0 if (probs[0] + probs[1]) >= 0.5 else 1
-                base_lane_B = 0 if (probs[0] + probs[2]) >= 0.5 else 1
-        else:
-            # Classical mode
+        # Classical mode: deterministic collision
+        if not self.in_superposition:
             if probs[0] > 0.5 or probs[1] > 0.5:
-                base_lane_A = 0
+                base_lane = 0
             else:
-                base_lane_A = 1
-            base_lane_B = base_lane_A  # Not shown in classical
+                base_lane = 1
+            car_lane = (base_lane + self.lane_offset) % 2
+            return 'crash' if car_lane == laser_lane else 'pass'
         
-        # Apply offset
+        # QUANTUM MODE: Use Born rule!
+        # Calculate visual car lane
+        if probs[1] > 0.01 or probs[2] > 0.01:  # Anti-correlated state
+            base_lane_A = 0
+            base_lane_B = 1
+        else:
+            base_lane_A = 0 if (probs[0] + probs[1]) >= 0.5 else 1
+            base_lane_B = 0 if (probs[0] + probs[2]) >= 0.5 else 1
+        
         visual_lane_A = (base_lane_A + self.lane_offset) % 2
         visual_lane_B = (base_lane_B + self.lane_offset) % 2
         
-        # Get the visual lane for the relevant universe
         if universe == 'A':
             car_lane = visual_lane_A
         else:
             car_lane = visual_lane_B
         
-        # Simple collision: same lane = crash
-        if car_lane == laser_lane:
-            return 'crash'
-        else:
+        # If car is visually in a different lane, definitely pass
+        if car_lane != laser_lane:
             return 'pass'
+        
+        # Car is in the SAME lane as laser - QUANTUM MEASUREMENT!
+        # Born rule: 50% chance to "tunnel through" (collapse to safe state)
+        # This represents the quantum superposition measurement
+        if random.random() < 0.5:
+            # QUANTUM TUNNELING! Collapsed to safe state
+            return 'pass'
+        else:
+            # Measurement collapsed to hit state
+            return 'crash'
 
     def _collapse_to_safe(self, universe, laser_lane):
         """
