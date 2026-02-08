@@ -111,37 +111,26 @@ class QuantumGame:
 
     def apply_hadamard_cnot(self):
         """
-        Press H: Apply Hadamard on qubit A, then CNOT (A controls B)
-        This creates an entangled Bell state!
+        Press H: Create entangled superposition!
         
-        If starting from |00⟩:
-        H⊗I → (|0⟩+|1⟩)/√2 ⊗ |0⟩ = (|00⟩+|10⟩)/√2
-        CNOT → (|00⟩+|11⟩)/√2 = Bell state |Φ+⟩
+        We create the |Ψ+⟩ Bell state: (|01⟩ + |10⟩)/√2
         
-        The cars are now ENTANGLED - their states are correlated!
+        This means:
+        - 50% chance: Car A in LEFT, Car B in RIGHT
+        - 50% chance: Car A in RIGHT, Car B in LEFT
+        
+        The cars are ANTI-CORRELATED (opposite lanes)!
+        This gives 50% survival on ANY laser - like quantum tunneling!
         """
         if self.paused or self.in_superposition:
             return
         
-        # Hadamard gate on first qubit: H ⊗ I
+        # Create |Ψ+⟩ = (|01⟩ + |10⟩)/√2 directly
+        # |01⟩ = A:left, B:right
+        # |10⟩ = A:right, B:left
         h = 1 / np.sqrt(2)
-        hadamard_I = np.array([
-            [h, 0, h, 0],
-            [0, h, 0, h],
-            [h, 0, -h, 0],
-            [0, h, 0, -h]
-        ], dtype=complex)
+        self.state = np.array([0, h, h, 0], dtype=complex)
         
-        # CNOT gate (qubit A controls qubit B)
-        cnot = np.array([
-            [1, 0, 0, 0],
-            [0, 1, 0, 0],
-            [0, 0, 0, 1],
-            [0, 0, 1, 0]
-        ], dtype=complex)
-        
-        # Apply H then CNOT
-        self.state = cnot @ (hadamard_I @ self.state)
         self.in_superposition = True
         self.hadamard_uses += 1
 
