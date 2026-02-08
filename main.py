@@ -238,9 +238,24 @@ class QuantumGame:
             # Random speed variation (0.7x to 1.5x base speed)
             speed_multiplier = 0.7 + random.random() * 0.8
             
+            # Check for "impossible" situations
+            # If there's a recent laser in one lane, don't spawn in the other lane
+            left_blocked = any(l['lane'] == 0 and l['y'] < 60 for l in self.lasers)
+            right_blocked = any(l['lane'] == 1 and l['y'] < 60 for l in self.lasers)
+            
+            spawn_lane = random.choice([0, 1])
+            
+            # Logic: Keep one lane clear if possible
+            if left_blocked and not right_blocked:
+                spawn_lane = 0  # Force left (keep right clear)
+            elif right_blocked and not left_blocked:
+                spawn_lane = 1  # Force right (keep left clear)
+            # If both or neither blocked, strictly random is fine 
+            # (if neither blocked, safe. if both blocked, already in trouble but consistent)
+            
             self.lasers.append({
                 'universe': universe,
-                'lane': random.choice([0, 1]),  # 0=left, 1=right
+                'lane': spawn_lane,
                 'y': -5,
                 'id': f"laser_{self.frame}",
                 'speed': self.laser_speed * speed_multiplier
@@ -388,11 +403,12 @@ class QuantumGame:
         # If laser was in lane X and we passed, we're in the OTHER lane
         safe_lane = 1 - laser_lane
         
-        # Collapse to classical state
+        # Collapse to classical state - ensure BOTH cars are in the safe lane
+        # This prevents confusion where one car is safe and the other appears in the danger lane
         if safe_lane == 0:  # Car in left lane
-            self.state = np.array([1.0, 0, 0, 0], dtype=complex)  # |00⟩
+            self.state = np.array([1.0, 0, 0, 0], dtype=complex)  # |00⟩ A:Left, B:Left
         else:  # Car in right lane
-            self.state = np.array([0, 0, 1.0, 0], dtype=complex)  # |10⟩
+            self.state = np.array([0, 0, 0, 1.0], dtype=complex)  # |11⟩ A:Right, B:Right
         
         self.in_superposition = False
         self.lane_offset = 0  # Reset offset
