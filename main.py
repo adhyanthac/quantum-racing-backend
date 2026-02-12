@@ -123,26 +123,63 @@ class QuantumGame:
         |10⟩ = A:right, B:left
         |11⟩ = A:right, B:right
         
-        Probabilities are RANDOM - player must read them to choose wisely!
+        Probabilities are RANDOM but constrained to avoid 50/50 splits.
+        We ensure distinct advantages (e.g., 70/30, 80/20) to make decisions clearer.
         """
         if self.paused:
             return
         
-        # Generate random amplitudes
-        # Create 4 random values and normalize
-        raw = np.array([random.random() for _ in range(4)])
+        # Generate valid probabilities that avoid ambiguity
+        # We want P(Left) >= 0.6 or P(Left) <= 0.4 for BOTH universes
+        valid_config_found = False
+        attempts = 0
         
-        # Ensure we have some variety (not all in one state)
-        # Add minimum threshold
-        raw = raw + 0.1
-        
-        # Normalize to get valid quantum state (sum of squares = 1)
-        amplitudes = np.sqrt(raw / np.sum(raw))
+        while not valid_config_found and attempts < 100:
+            attempts += 1
+            
+            # Generate random amplitudes
+            raw = np.array([random.random() for _ in range(4)])
+            raw = raw + 0.1 # Minimum threshold
+            
+            # Normalize
+            amplitudes = np.sqrt(raw / np.sum(raw))
+            probs = amplitudes ** 2
+            
+            # Calculate marginals
+            p_A_left = probs[0] + probs[1]
+            p_B_left = probs[0] + probs[2]
+            
+            # Check constraints: |P - 0.5| >= 0.1 (so outside 0.4-0.6 range)
+            # This ensures at least a 60-40 split
+            if abs(p_A_left - 0.5) >= 0.1 and abs(p_B_left - 0.5) >= 0.1:
+                valid_config_found = True
         
         self.state = amplitudes.astype(complex)
         self.in_superposition = True
         self.hadamard_uses += 1
         self.lane_offset = 0  # Reset offset when entering superposition
+
+    def apply_laser_switch(self):
+        """
+        Move the incoming laser to the other universe in the same lane.
+        Allows player to strategically position threats based on probabilities.
+        """
+        if self.paused or not self.in_superposition:
+            return
+
+        # Find the most threatening incoming laser (closest to car but not passed)
+        incoming_lasers = [l for l in self.lasers if l['y'] < self.COLLISION_Y_MIN]
+        
+        if not incoming_lasers:
+            return
+            
+        # Sort by Y (highest Y = closest to bottom/car)
+        incoming_lasers.sort(key=lambda l: l['y'], reverse=True)
+        target_laser = incoming_lasers[0]
+        
+        # Switch universe
+        curr_u = target_laser['universe']
+        target_laser['universe'] = 'B' if curr_u == 'A' else 'A'
 
     def apply_pauli_x_A(self):
         """
@@ -510,6 +547,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 elif action == "pauli_x_B":
                     # Arrow keys - switch lane in Universe B
                     game.apply_pauli_x_B()
+                elif action == "laser_switch":
+                    # Button press - switch laser universe
+                    game.apply_laser_switch()
                 elif action == "pause":
                     game.toggle_pause()
                 elif action == "set_speed":
