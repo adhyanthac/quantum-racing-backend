@@ -43,9 +43,9 @@ app.add_middleware(
 
 # Speed configurations - INCREASED by 60%
 SPEED_CONFIGS = {
-    'slow': {'laser_speed': 0.8, 'spawn_interval': 60, 'superposition_spawn': 45},
-    'normal': {'laser_speed': 1.1, 'spawn_interval': 45, 'superposition_spawn': 32},
-    'fast': {'laser_speed': 1.6, 'spawn_interval': 30, 'superposition_spawn': 22},
+    'slow': {'laser_speed': 0.8, 'spawn_interval': 60, 'superposition_spawn': 45, 'duration': 60},
+    'normal': {'laser_speed': 1.1, 'spawn_interval': 45, 'superposition_spawn': 32, 'duration': 45},
+    'fast': {'laser_speed': 1.6, 'spawn_interval': 30, 'superposition_spawn': 22, 'duration': 30},
 }
 
 
@@ -60,9 +60,10 @@ class QuantumGame:
     - Second qubit: Universe B lane (|0⟩ = left, |1⟩ = right)
     """
     
-    GAME_DURATION_SECONDS = 60
+    
     GAME_FPS = 60
-    TOTAL_FRAMES = GAME_DURATION_SECONDS * GAME_FPS
+    
+    # Collision zone
     
     # Collision zone
     CAR_Y = 75
@@ -96,6 +97,7 @@ class QuantumGame:
         self.laser_speed = config['laser_speed']
         self.classical_spawn_interval = config['spawn_interval']
         self.superposition_spawn_interval = config['superposition_spawn']
+        self.total_frames = config['duration'] * self.GAME_FPS
         self.speed_mode = speed
 
     @property
@@ -107,10 +109,11 @@ class QuantumGame:
         self.laser_speed = config['laser_speed']
         self.classical_spawn_interval = config['spawn_interval']
         self.superposition_spawn_interval = config['superposition_spawn']
+        self.total_frames = config['duration'] * self.GAME_FPS
         self.speed_mode = speed
 
     def get_progress(self):
-        return min(100, (self.frame / self.TOTAL_FRAMES) * 100)
+        return min(100, (self.frame / self.total_frames) * 100)
 
     def apply_hadamard_cnot(self):
         """
@@ -260,7 +263,7 @@ class QuantumGame:
         self.frame += 1
         
         # Win condition
-        if self.frame >= self.TOTAL_FRAMES:
+        if self.frame >= self.total_frames:
             self.game_won = True
             self.running = False
             return
@@ -506,7 +509,7 @@ class QuantumGame:
             "running": self.running,
             "paused": self.paused,
             "game_won": self.game_won,
-            "total_frames": self.TOTAL_FRAMES,
+            "total_frames": self.total_frames,
             "hadamard_uses": self.hadamard_uses,
             "lasers_passed": self.lasers_passed,
             "crash_frame": self.crash_frame,
