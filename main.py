@@ -44,8 +44,8 @@ app.add_middleware(
 # Speed configurations - INCREASED by 60%
 SPEED_CONFIGS = {
     'slow': {'laser_speed': 0.8, 'spawn_interval': 60, 'superposition_spawn': 45, 'duration': 60},
-    'normal': {'laser_speed': 1.1, 'spawn_interval': 45, 'superposition_spawn': 32, 'duration': 45},
-    'fast': {'laser_speed': 1.6, 'spawn_interval': 30, 'superposition_spawn': 22, 'duration': 30},
+    'normal': {'laser_speed': 1.1, 'spawn_interval': 45, 'superposition_spawn': 32, 'duration': 60},
+    'fast': {'laser_speed': 1.6, 'spawn_interval': 30, 'superposition_spawn': 22, 'duration': 60},
 }
 
 
@@ -536,9 +536,14 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     game = QuantumGame()
     
     try:
+        loop = asyncio.get_event_loop()
         while True:
+            start_time = loop.time()
+            
             try:
-                data = await asyncio.wait_for(websocket.receive_json(), timeout=0.016)
+                # Wait for input with a short timeout to prevent blocking
+                # We calculate exact sleep time at the end
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=0.001)
                 action = data.get("action")
                 
                 if action == "hadamard":
@@ -578,7 +583,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     "data": game.get_state()
                 })
             
-            await asyncio.sleep(1 / 60)
+            # Frame pacing - maintain 60 FPS
+            elapsed = loop.time() - start_time
+            sleep_time = max(0.0, (1/60) - elapsed)
+            await asyncio.sleep(sleep_time)
             
     except WebSocketDisconnect:
         print(f"Client {client_id} - Score: {game.score}, H uses: {game.hadamard_uses}")
