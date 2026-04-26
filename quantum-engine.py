@@ -1,22 +1,25 @@
 """
-QUANTUM RACING BACKEND v4.0
-Real Quantum Mechanics with Entanglement
+QUANTUM RACING BACKEND v5.0
+Real Quantum Mechanics with Entanglement & Educational Features
 DR. XU GROUP | TEXAS A&M PHYSICS
 
 QUANTUM MECHANICS IMPLEMENTATION:
 - State vector: |ψ⟩ = α|00⟩ + β|01⟩ + γ|10⟩ + δ|11⟩
 - First qubit = Universe A lane, Second qubit = Universe B lane
 - |0⟩ = left lane, |1⟩ = right lane
-
 GATES:
-- H (Hadamard on qubit A) + CNOT: Creates entangled Bell state
+- H⊗I then CNOT: Creates real entangled Bell state |Φ+⟩
+- S (Phase gate on qubit A): Rotates phase by π/2
 - Pauli-X on qubit A: Switches Universe A car lane (A/D keys)
 - Pauli-X on qubit B: Switches Universe B car lane (arrow keys)
 
-MEASUREMENT:
-- Laser hitting = measurement event
-- Born rule determines probability of each outcome
-- Collapse to definite state based on probability
+EDUCATIONAL FEATURES:
+- Concurrence: real entanglement measure sent to frontend
+- Decoherence: superposition decays over time (~5 seconds)
+- Quantum tunneling: small chance to survive a crash
+- Dirac notation: human-readable state sent each frame
+- Gate log: history of applied gates
+- Measurement stats: cumulative Born rule verification
 """
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -30,7 +33,7 @@ from datetime import datetime
 app = FastAPI(
     title="Quantum Racing Backend",
     description="Real Quantum Mechanics Racing Simulation",
-    version="4.0.0"
+    version="5.0.0"
 )
 
 app.add_middleware(
@@ -70,6 +73,11 @@ class QuantumGame:
     COLLISION_Y_MIN = 73
     COLLISION_Y_MAX = 77
     
+    # Decoherence: superposition decays over this many frames (~5 seconds)
+    DECOHERENCE_FRAMES = 300
+    # Quantum tunneling base probability (decreases with progress)
+    TUNNEL_PROB_BASE = 0.15
+
     def __init__(self, speed='normal'):
         # Quantum state vector: [|00⟩, |01⟩, |10⟩, |11⟩]
         # Start in classical state |00⟩ (both in left lane, Universe B inactive)
@@ -91,6 +99,14 @@ class QuantumGame:
         
         # Lane offset for visual swapping (toggles 0/1)
         self.lane_offset = 0
+        
+        # NEW: Educational & quantum features
+        self.gate_log = []              # History of gates applied
+        self.superposition_frame = 0    # Frame when superposition started
+        self.phase_A = 0.0              # Current phase on qubit A
+        self.tunnel_event = False        # Flag for tunneling save
+        self.measurement_stats = {'00': 0, '01': 0, '10': 0, '11': 0}
+        self.total_measurements = 0
         
         # Speed settings
         config = SPEED_CONFIGS.get(speed, SPEED_CONFIGS['normal'])
@@ -115,52 +131,98 @@ class QuantumGame:
     def get_progress(self):
         return min(100, (self.frame / self.total_frames) * 100)
 
+    def compute_concurrence(self):
+        """
+        Compute the concurrence of the 2-qubit state.
+        C = 0 means product state, C = 1 means maximally entangled.
+        Uses the formula: C = 2|αδ - βγ| for a pure 2-qubit state.
+        """
+        a, b, c, d = self.state
+        return float(2 * abs(a * d - b * c))
+
+    def get_coherence(self):
+        """
+        Returns coherence level (1.0 = fresh superposition, 0.0 = fully decohered).
+        Decays linearly over DECOHERENCE_FRAMES.
+        """
+        if not self.in_superposition:
+            return 0.0
+        elapsed = self.frame - self.superposition_frame
+        return max(0.0, 1.0 - elapsed / self.DECOHERENCE_FRAMES)
+
+    def get_dirac_notation(self):
+        """Return human-readable Dirac notation of the current state."""
+        labels = ['|00⟩', '|01⟩', '|10⟩', '|11⟩']
+        terms = []
+        for amp, label in zip(self.state, labels):
+            prob = abs(amp) ** 2
+            if prob > 0.005:  # Skip near-zero terms
+                coeff = f"{abs(amp):.2f}"
+                terms.append(f"{coeff}{label}")
+        return ' + '.join(terms) if terms else '|00⟩'
+
     def apply_hadamard_cnot(self):
         """
-        Press H: Create TRUE quantum superposition with random probabilities!
+        Press H: Apply REAL Hadamard gate on qubit A, then CNOT(A→B).
         
-        State vector: |ψ⟩ = α|00⟩ + β|01⟩ + γ|10⟩ + δ|11⟩
+        H⊗I matrix (Hadamard on first qubit, identity on second):
+        1/√2 * [[1,0,1,0],[0,1,0,1],[1,0,-1,0],[0,1,0,-1]]
         
-        |00⟩ = A:left, B:left
-        |01⟩ = A:left, B:right  
-        |10⟩ = A:right, B:left
-        |11⟩ = A:right, B:right
+        CNOT matrix (control=A, target=B):
+        [[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]]
         
-        Probabilities are RANDOM but constrained to avoid 50/50 splits.
-        We ensure distinct advantages (e.g., 70/30, 80/20) to make decisions clearer.
+        From |00⟩ this produces the Bell state: (|00⟩ + |11⟩)/√2
+        This is REAL quantum mechanics — not random amplitudes!
         """
         if self.paused:
             return
         
-        # Generate valid probabilities that avoid ambiguity
-        # We want P(Left) >= 0.6 or P(Left) <= 0.4 for BOTH universes
-        valid_config_found = False
-        attempts = 0
+        # Step 1: Hadamard on qubit A (H ⊗ I)
+        h = 1.0 / np.sqrt(2)
+        H_I = np.array([
+            [h, 0, h, 0],
+            [0, h, 0, h],
+            [h, 0, -h, 0],
+            [0, h, 0, -h]
+        ], dtype=complex)
         
-        while not valid_config_found and attempts < 100:
-            attempts += 1
-            
-            # Generate random amplitudes
-            raw = np.array([random.random() for _ in range(4)])
-            raw = raw + 0.1 # Minimum threshold
-            
-            # Normalize
-            amplitudes = np.sqrt(raw / np.sum(raw))
-            probs = amplitudes ** 2
-            
-            # Calculate marginals
-            p_A_left = probs[0] + probs[1]
-            p_B_left = probs[0] + probs[2]
-            
-            # Check constraints: |P - 0.5| >= 0.1 (so outside 0.4-0.6 range)
-            # This ensures at least a 60-40 split
-            if abs(p_A_left - 0.5) >= 0.1 and abs(p_B_left - 0.5) >= 0.1:
-                valid_config_found = True
+        # Step 2: CNOT (control=A, target=B)
+        CNOT = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+            [0, 0, 1, 0]
+        ], dtype=complex)
         
-        self.state = amplitudes.astype(complex)
+        # Apply H⊗I then CNOT
+        self.state = CNOT @ (H_I @ self.state)
         self.in_superposition = True
         self.hadamard_uses += 1
-        self.lane_offset = 0  # Reset offset when entering superposition
+        self.lane_offset = 0
+        self.superposition_frame = self.frame
+        self.phase_A = 0.0
+        self.gate_log.append('H⊗I')
+        self.gate_log.append('CNOT')
+
+    def apply_phase_gate(self):
+        """
+        Press S: Apply S gate (phase gate) on qubit A.
+        S = diag(1, 1, i, i) in the 2-qubit basis.
+        This rotates phase by π/2 without changing measurement probabilities.
+        The effect shows up in interference when combined with other gates.
+        """
+        if self.paused or not self.in_superposition:
+            return
+        
+        S_I = np.array([
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1j, 0],
+            [0, 0, 0, 1j]
+        ], dtype=complex)
+        self.state = S_I @ self.state
+        self.phase_A = (self.phase_A + np.pi / 2) % (2 * np.pi)
+        self.gate_log.append('S')
 
     def apply_laser_switch(self):
         """
@@ -261,12 +323,29 @@ class QuantumGame:
             return
         
         self.frame += 1
+        self.tunnel_event = False  # Reset each frame
         
         # Win condition
         if self.frame >= self.total_frames:
             self.game_won = True
             self.running = False
             return
+        
+        # Decoherence: gradually collapse superposition over time
+        if self.in_superposition:
+            coherence = self.get_coherence()
+            if coherence <= 0:
+                # Fully decohered — collapse to most probable state
+                probs = np.abs(self.state) ** 2
+                outcome = np.random.choice(4, p=probs)
+                self.state = np.zeros(4, dtype=complex)
+                self.state[outcome] = 1.0
+                self.in_superposition = False
+                self.lane_offset = 0
+                self.gate_log.append('DECOHERE')
+                labels = ['00', '01', '10', '11']
+                self.measurement_stats[labels[outcome]] += 1
+                self.total_measurements += 1
         
         # Spawn lasers - but only ONE at a time near the player!
         if self.frame % self.laser_spawn_interval == 0:
@@ -371,9 +450,19 @@ class QuantumGame:
                 prob_safe = probs[0] + probs[2]
         
         # Born rule: survive with probability = prob_safe
+        # Record measurement outcome for statistics
+        self.total_measurements += 1
+        
         if random.random() < prob_safe:
             return 'pass'
         else:
+            # Quantum tunneling: small chance to survive even when "crashed"
+            # Probability decreases as game progresses (harder over time)
+            progress_factor = 1.0 - self.get_progress() / 100.0
+            tunnel_prob = self.TUNNEL_PROB_BASE * progress_factor
+            if self.in_superposition and random.random() < tunnel_prob:
+                self.tunnel_event = True
+                return 'pass'
             return 'crash'
 
     def _collapse_to_safe(self, universe, laser_lane):
@@ -514,18 +603,27 @@ class QuantumGame:
             "lasers_passed": self.lasers_passed,
             "crash_frame": self.crash_frame,
             "speed_mode": self.speed_mode,
-            "lane_offset": self.lane_offset
+            "lane_offset": self.lane_offset,
+            # NEW: Educational quantum fields
+            "dirac_notation": self.get_dirac_notation(),
+            "gate_log": self.gate_log[-8:],  # Last 8 gates
+            "concurrence": self.compute_concurrence(),
+            "coherence": self.get_coherence(),
+            "tunnel_event": self.tunnel_event,
+            "phase_A": round(self.phase_A, 3),
+            "measurement_stats": self.measurement_stats,
+            "total_measurements": self.total_measurements
         }
 
 
 @app.get("/")
 async def root():
-    return {"message": "Quantum Racing v4.0 - Real Entanglement", "status": "ONLINE"}
+    return {"message": "Quantum Racing v5.0 - Real Gates, Decoherence & Tunneling", "status": "ONLINE"}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "version": "4.0.0"}
+    return {"status": "healthy", "version": "5.0.0"}
 
 
 @app.websocket("/ws/{client_id}")
@@ -549,6 +647,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if action == "hadamard":
                     # H key - enter superposition (Hadamard + CNOT)
                     game.apply_hadamard_cnot()
+                elif action == "phase_gate":
+                    # S key - apply phase gate
+                    game.apply_phase_gate()
                 elif action == "pauli_x_A":
                     # A/D key - switch lane in Universe A
                     game.apply_pauli_x_A()
